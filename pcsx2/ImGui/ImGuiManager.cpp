@@ -824,6 +824,12 @@ struct OSDMessage
 
 static std::deque<OSDMessage> s_osd_active_messages;
 static std::deque<OSDMessage> s_osd_posted_messages;
+static ImGuiManager::OSDMessageHook s_osd_message_hook = nullptr;
+
+void ImGuiManager::SetOSDMessageHook(OSDMessageHook hook)
+{
+	s_osd_message_hook = hook;
+}
 static std::mutex s_osd_messages_lock;
 
 void Host::AddOSDMessage(std::string message, float duration /*= 2.0f*/)
@@ -849,6 +855,9 @@ void Host::AddKeyedOSDMessage(std::string key, std::string message, float durati
 	msg.target_y = -1.0f;
 	msg.last_y = -1.0f;
 
+	if (s_osd_message_hook)
+		s_osd_message_hook(msg.key, msg.text, duration);
+
 	std::unique_lock<std::mutex> lock(s_osd_messages_lock);
 	s_osd_posted_messages.push_back(std::move(msg));
 }
@@ -870,6 +879,9 @@ void Host::AddIconOSDMessage(std::string key, const char* icon, const std::strin
 	msg.duration = duration;
 	msg.target_y = -1.0f;
 	msg.last_y = -1.0f;
+
+	if (s_osd_message_hook)
+		s_osd_message_hook(msg.key, msg.text, duration);
 
 	std::unique_lock<std::mutex> lock(s_osd_messages_lock);
 	s_osd_posted_messages.push_back(std::move(msg));

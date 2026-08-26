@@ -31,6 +31,11 @@ namespace ImGuiManager
 	/// Initializes ImGui, creates fonts, etc.
 	bool Initialize();
 
+	/// A frontend that draws its own notifications takes OSD messages here.
+	/// Duration is seconds; the key is empty for an unkeyed message.
+	using OSDMessageHook = void (*)(const std::string& key, const std::string& text, float duration);
+	void SetOSDMessageHook(OSDMessageHook hook);
+
 	/// Initializes fullscreen UI.
 	bool InitializeFullscreenUI();
 
