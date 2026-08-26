@@ -1,0 +1,184 @@
+name: Ignition core release
+
+# Builds the cores Ignition downloads and publishes them on ignition-v* tags,
+# in the buildbot's one-zip-per-core layout, plus the system data the core
+# needs beside the BIOS. Kept apart from libretro_builds.yml so merges from
+# upstream pcee2 never touch it.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["ignition-v*"]
+
+jobs:
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang liblz4-dev libwebp-dev \
+            libshaderc-dev libcurl4-openssl-dev libpcap-dev libfontconfig-dev \
+            libudev-dev libx11-dev libxrandr-dev libxext-dev extra-cmake-modules \
+            libwayland-dev libegl-dev libdbus-1-dev libfreetype-dev libjpeg-turbo8-dev \
+            libpng-dev zlib1g-dev libzstd-dev libdrm-dev libxkbcommon-dev libpipewire-0.3-dev \
+            libpulse-dev libasound2-dev \
+            libxcursor-dev libxi-dev libxinerama-dev libxfixes-dev libxrender-dev \
+            libxss-dev libxtst-dev libgl1-mesa-dev libdecor-0-dev libgbm-dev
+      - name: Cache dependencies
+        id: cache-deps
+        uses: actions/cache@v6
+        with:
+          path: deps
+          key: linux-libretro-static-deps ${{ hashFiles('pcee2-libretro/scripts/build-deps-linux.sh', 'pcee2-libretro/scripts/deps.versions') }}
+      - name: Build dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        env:
+          PCEE2_SDL_STATIC: "1"
+          PCEE2_BUILD_JPEG: "1"
+        run: bash pcee2-libretro/scripts/build-deps-linux.sh "$PWD/deps"
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DENABLE_QT_UI=OFF -DENABLE_TESTS=OFF -DENABLE_LIBRETRO=ON \
+            -DCMAKE_PREFIX_PATH="$PWD/deps" \
+            -DSHADERC_STATIC=ON \
+            "-DSHADERC_LIBRARY=$PWD/deps/lib/libshaderc_combined.a" \
+            -DDISABLE_ADVANCE_SIMD=ON
+      - name: Build
+        run: cmake --build build --target pcee2_libretro
+      - name: Package
+        run: |
+          mkdir out
+          zip -j out/pcee2_libretro.so.zip build/bin/pcee2_libretro.so
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pcee2_libretro-linux-x86_64
+          path: out/*
+
+  windows:
+    name: Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Locate vcvars
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`call vswhere -latest -property installationPath`) do set "VSINSTPATH=%%i"
+          echo VCVARSPATH=%VSINSTPATH%\VC\Auxiliary\Build\vcvars64.bat>>%GITHUB_ENV%
+      - name: Cache dependencies
+        id: cache-deps
+        uses: actions/cache@v6
+        with:
+          path: deps
+          key: windows-libretro-static-deps ${{ hashFiles('pcee2-libretro/scripts/build-deps-windows.bat', 'pcee2-libretro/scripts/deps.versions') }}
+      - name: Build dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        shell: cmd
+        run: |
+          call "%VCVARSPATH%" || exit /b
+          call pcee2-libretro\scripts\build-deps-windows.bat %cd%\deps || exit /b
+      - name: Configure
+        shell: cmd
+        run: |
+          call "%VCVARSPATH%" || exit /b
+          cmake . -B build "-DCMAKE_PREFIX_PATH=%cd%\deps" -DCMAKE_BUILD_TYPE=Release -DENABLE_QT_UI=OFF -DENABLE_TESTS=OFF -DENABLE_LIBRETRO=ON -DDISABLE_ADVANCE_SIMD=ON -DSHADERC_STATIC=ON "-DSHADERC_LIBRARY=%cd%\deps\lib\shaderc_combined.lib" -G Ninja
+      - name: Build
+        shell: cmd
+        run: |
+          call "%VCVARSPATH%" || exit /b
+          cmake --build build --target pcee2_libretro || exit /b
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory out | Out-Null
+          Compress-Archive -Path build\bin\pcee2_libretro.dll -DestinationPath out\pcee2_libretro.dll.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pcee2_libretro-windows-x64
+          path: out/*
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-15
+    timeout-minutes: 320
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Install packages
+        run: brew install ninja nasm || (brew update && brew install ninja nasm)
+      - name: Cache dependencies
+        id: cache-deps
+        uses: actions/cache@v6
+        with:
+          path: ~/deps
+          key: macos-arm64-libretro-static-deps ${{ hashFiles('pcee2-libretro/scripts/build-deps-macos.sh', 'pcee2-libretro/scripts/deps.versions') }}
+      - name: Build dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: OSX_ARCH=arm64 bash pcee2-libretro/scripts/build-deps-macos.sh "$HOME/deps"
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_PREFIX_PATH="$HOME/deps" \
+            -DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DDISABLE_ADVANCE_SIMD=ON \
+            -DENABLE_QT_UI=OFF -DENABLE_TESTS=OFF -DENABLE_LIBRETRO=ON \
+            -DSHADERC_STATIC=ON "-DSHADERC_LIBRARY=$HOME/deps/lib/libshaderc_combined.a"
+      - name: Build
+        run: cmake --build build --target pcee2_libretro --parallel
+      - name: Package
+        # No MoltenVK beside the core: it adopts the frontend's loader.
+        run: |
+          codesign -f -s - build/bin/pcee2_libretro.dylib
+          mkdir out
+          zip -j out/pcee2_libretro.dylib.zip build/bin/pcee2_libretro.dylib
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pcee2_libretro-macos-arm64
+          path: out/*
+
+  system:
+    name: System data
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Package resources and patches
+        # Lands in the frontend's system directory as pcsx2/resources/.
+        run: |
+          mkdir -p stage/pcsx2/resources out
+          cp -R bin/resources/. stage/pcsx2/resources/
+          curl -sSL -o stage/pcsx2/resources/patches.zip \
+            https://github.com/PCSX2/pcsx2_patches/releases/latest/download/patches.zip
+          (cd stage && zip -qr ../out/pcee2_system.zip pcsx2)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pcee2_system
+          path: out/*
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/ignition-v')
+    needs: [linux, windows, macos, system]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*/*
