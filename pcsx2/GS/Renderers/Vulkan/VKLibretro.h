@@ -45,6 +45,10 @@ namespace VKLibretro
 	// Swap the loader's global vkGetInstanceProcAddr for the intercepting
 	// wrapper. Call after Vulkan::LoadVulkanLibrary(), before GS opens.
 	void InstallWraps();
+	// Route instance-level lookups through the frontend's loader: the
+	// instance it negotiated belongs to that loader, not to the MoltenVK the
+	// core dlopened for itself, and another loader answers null for it.
+	void UseFrontendInstanceProcAddr(PFN_vkGetInstanceProcAddr gipa);
 
 	// The retro_hw_render_interface_vulkan acquired after context_reset
 	// (stored as void* so this header stays free of libretro headers).

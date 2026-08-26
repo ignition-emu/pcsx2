@@ -1211,6 +1211,7 @@ static bool CreateVulkanDevice(retro_vulkan_context* context, VkInstance instanc
 	VKLibretro::Init.instance = instance;
 	VKLibretro::Init.gpu = gpu;
 	VKLibretro::Init.get_instance_proc_addr = get_instance_proc_addr;
+	VKLibretro::UseFrontendInstanceProcAddr(get_instance_proc_addr);
 	VKLibretro::Init.required_device_extensions = required_device_extensions;
 	VKLibretro::Init.num_required_device_extensions = num_required_device_extensions;
 	VKLibretro::Init.required_device_layers = required_device_layers;

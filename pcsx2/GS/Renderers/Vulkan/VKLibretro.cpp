@@ -158,6 +158,12 @@ namespace VKLibretro
 		vkGetInstanceProcAddr = vkGetInstanceProcAddr_libretro;
 	}
 
+	void UseFrontendInstanceProcAddr(PFN_vkGetInstanceProcAddr gipa)
+	{
+		if (gipa)
+			s_vkGetInstanceProcAddr_org = gipa;
+	}
+
 	void SetHWRenderInterface(void* iface)
 	{
 		// Waits out a submit that is already inside the wrapper, so once the
