@@ -37,10 +37,11 @@ void Vulkan::ResetVulkanLibraryFunctionPointers()
 }
 
 static DynamicLibrary s_vulkan_library;
+static bool s_adopted = false;
 
 bool Vulkan::IsVulkanLibraryLoaded()
 {
-	return s_vulkan_library.IsOpen();
+	return s_adopted || s_vulkan_library.IsOpen();
 }
 
 bool Vulkan::LoadVulkanLibrary(Error* error)
@@ -87,10 +88,46 @@ bool Vulkan::LoadVulkanLibrary(Error* error)
 	return true;
 }
 
+bool Vulkan::AdoptInstanceProcAddr(PFN_vkGetInstanceProcAddr gipa, VkInstance instance)
+{
+	if (!gipa)
+		return false;
+	if (s_vulkan_library.IsOpen())
+		s_vulkan_library.Close();
+	ResetVulkanLibraryFunctionPointers();
+	vkGetInstanceProcAddr = gipa;
+
+	// Global commands resolve against a null instance; vkDestroyInstance is
+	// the one module entry point that needs the instance itself.
+	bool required_functions_missing = false;
+#define VULKAN_MODULE_ENTRY_POINT(name, required) \
+	if (std::strcmp(#name, "vkGetInstanceProcAddr") != 0) \
+	{ \
+		name = reinterpret_cast<PFN_##name>(gipa( \
+			(std::strcmp(#name, "vkDestroyInstance") == 0) ? instance : VK_NULL_HANDLE, #name)); \
+		if (!name && required) \
+		{ \
+			ERROR_LOG("Vulkan: Frontend loader has no {}", #name); \
+			required_functions_missing = true; \
+		} \
+	}
+#include "VKEntryPoints.inl"
+#undef VULKAN_MODULE_ENTRY_POINT
+
+	if (required_functions_missing)
+	{
+		ResetVulkanLibraryFunctionPointers();
+		return false;
+	}
+	s_adopted = true;
+	return true;
+}
+
 void Vulkan::UnloadVulkanLibrary()
 {
 	ResetVulkanLibraryFunctionPointers();
 	s_vulkan_library.Close();
+	s_adopted = false;
 }
 
 bool Vulkan::LoadVulkanInstanceFunctions(VkInstance instance)

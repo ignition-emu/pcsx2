@@ -91,6 +91,9 @@ namespace Vulkan
 {
 	bool IsVulkanLibraryLoaded();
 	bool LoadVulkanLibrary(Error* error);
+	// Take the loader entry points from a frontend's vkGetInstanceProcAddr
+	// instead of a library of our own; the instance is the frontend's too.
+	bool AdoptInstanceProcAddr(PFN_vkGetInstanceProcAddr gipa, VkInstance instance);
 	bool LoadVulkanInstanceFunctions(VkInstance instance);
 	bool LoadVulkanDeviceFunctions(VkDevice device);
 	void UnloadVulkanLibrary();

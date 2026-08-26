@@ -1211,7 +1211,12 @@ static bool CreateVulkanDevice(retro_vulkan_context* context, VkInstance instanc
 	VKLibretro::Init.instance = instance;
 	VKLibretro::Init.gpu = gpu;
 	VKLibretro::Init.get_instance_proc_addr = get_instance_proc_addr;
-	VKLibretro::UseFrontendInstanceProcAddr(get_instance_proc_addr);
+	if (!Vulkan::AdoptInstanceProcAddr(get_instance_proc_addr, instance))
+	{
+		Console.Error("Frontend's vkGetInstanceProcAddr does not resolve the loader entry points.");
+		return false;
+	}
+	VKLibretro::InstallWraps();
 	VKLibretro::Init.required_device_extensions = required_device_extensions;
 	VKLibretro::Init.num_required_device_extensions = num_required_device_extensions;
 	VKLibretro::Init.required_device_layers = required_device_layers;
@@ -1957,13 +1962,9 @@ bool retro_load_game(const struct retro_game_info* game)
 			};
 			s_environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE, (void*)&neg_iface);
 
-			Error vk_error;
-			if (!Vulkan::IsVulkanLibraryLoaded() && !Vulkan::LoadVulkanLibrary(&vk_error))
-			{
-				Console.Error(fmt::format("LoadVulkanLibrary: {}", vk_error.GetDescription()));
-				return false;
-			}
-			VKLibretro::InstallWraps();
+			// No loader of the core's own: the frontend's arrives with the
+			// negotiated instance and is adopted in CreateVulkanDevice. A
+			// frontend that never negotiates gets GSDeviceVK's own dlopen.
 			VKLibretro::Active = true;
 			s_context_ready.store(false, std::memory_order_release);
 		}
