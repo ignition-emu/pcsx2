@@ -1,3 +1,10 @@
+> **Ignition fork.** This is `ignition-emu/pcsx2`: pcee2's libretro layer on
+> upstream PCSX2, plus what Ignition's host needs — the core adopts the
+> frontend's Vulkan loader (no MoltenVK shipped), hands OSD messages to the
+> frontend, and is published by `.github/workflows/ignition-release.yml` on
+> `ignition-v*` tags. Branch `ignition`; upstream pcee2 is merged from its
+> `libretro` branch.
+
 # PCEE2 — PCSX2 libretro core
 
 ![Libretro Core Builds](https://img.shields.io/github/actions/workflow/status/WizzardSK/pcee2-libretro/libretro_builds.yml?branch=libretro&label=core%20builds)
